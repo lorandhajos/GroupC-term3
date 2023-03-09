@@ -42,10 +42,6 @@ int angle = 0;
 #define trigger 8
 #define echo 7
 
-bool isHoldingObject = false;
-
-//float ussDuration, ussDistance;
-
 // Serial buffer
 const int BUFFER_SIZE = 50;
 char buf[BUFFER_SIZE] = { 0 };
@@ -56,6 +52,10 @@ QTRSensors qtr;
 static const uint8_t analog_pins[] = {A7,A6,A5,A4,A3,A2,A1,A0};
 const uint8_t SensorCount = 8;
 uint16_t sensorValues[SensorCount];
+
+bool isHoldingObject = false;
+int endBlockChance = 0;
+bool followLine = false;
 
 // Headers
 void move(int value = 0);
@@ -71,6 +71,7 @@ void setup() {
   
   // Initialize servo
   servo.attach(servoPin);
+  servo.write(120);
 
   // Initialize neoPixels
   neoPixels.begin();
@@ -100,7 +101,7 @@ void setup() {
   qtr.setTypeAnalog();
   qtr.setSensorPins(analog_pins, SensorCount);
 
-  moveDelay(100);
+  moveDelay(140);
 
   // Start sensor calibration
   for (uint16_t i = 0; i < 250; i++) {
@@ -113,7 +114,7 @@ void setup() {
     }
   }
 
-  moveDelay(200);
+  moveDelay(50);
 }
 
 void updateA() {
@@ -128,6 +129,10 @@ void updateB() {
   interrupts();
 }
 
+int degreeToCounter(int degree = 0) {
+  return abs(degree) / 5.5;
+}
+
 void moveDelay(int numDelay) {
   turnMotor(motorA, modeA, 255);
   turnMotor(motorB, modeB, 255);
@@ -136,8 +141,31 @@ void moveDelay(int numDelay) {
   turnMotor(motorB, modeB);
 }
 
-int degreeToCounter(int degree = 0) {
-  return abs(degree) / 5.5;
+// not tested
+void moveDistance(int distance) {
+  int distA = countA + degreeToCounter(distance);
+  int distB = countB + degreeToCounter(distance); 
+  int * counterA = &countA;
+  int * counterB = &countB;
+
+  if (distance > 0) {
+    while (*counterA < distA || *counterB < distB) {
+      // Load bearing serial print
+      Serial.print("");
+      turnMotor(motorA, modeA, 255);
+      turnMotor(motorB, modeB, 255);
+    }
+  } else {
+    while (*counterA < distA || *counterB < distB) {
+      // Load bearing serial print
+      Serial.print("");
+      turnMotor(motorA, modeA, -255);
+      turnMotor(motorB, modeB, -255);
+    }
+  }
+
+  turnMotor(motorA, modeA);
+  turnMotor(motorB, modeB);
 }
 
 void turnDegrees(int degree = 0) {
@@ -226,39 +254,48 @@ void loop() {
   int16_t leftMotorSpeed = 255;
   int16_t rightMotorSpeed = 255;
 
+  // turn left
   if (error < -500) {
-    leftMotorSpeed = 0;  // turn left
+    leftMotorSpeed = 0;
   }
-  
+
+  // turn right
   if (error > 500) {
-    rightMotorSpeed = 0;  // turn right
+    rightMotorSpeed = 0;
   }
 
-  /*
-    Pick up object if the robot is not holding anything
-  */
-  if (!isHoldingObject) {
-    int someNumber = 0;
-    for (uint8_t i = 0; i < SensorCount; i++) {
-      someNumber += sensorValues[i];
-    }
+  int sumOfSensors = 0;
 
-    if (someNumber >= 7984) {
+  for (uint8_t i = 0; i < SensorCount; i++) {
+    sumOfSensors += sensorValues[i];
+  }
+
+  // detect the end/start block
+  if (sumOfSensors >= 7984) {
+    endBlockChance++;
+
+    if (endBlockChance >= 5 && !isHoldingObject) {
+      move();
       servo.write(50);
+      delay(3000);
       isHoldingObject = true;
-      delay(30);
-      Serial.println("Do the turn");
-      moveDelay(150);
-      turnDegrees(-90);
-      move();
-      delay(5000);
-      move();
-    } else {
-      move(255);
     }
+  } else if (endBlockChance >= 40) {
+    move();
+    moveDelay(90);
+    turnDegrees(-95);
+    move();
+    delay(3000);
+    Serial.println(endBlockChance);
+    endBlockChance = 0;
+    followLine = true;
   }
 
-  if (isHoldingObject) {
+  // follow the line
+  if (followLine) {
+    turnMotor(motorA, modeA, leftMotorSpeed);
+    turnMotor(motorB, modeB, rightMotorSpeed);
+  } else {
     turnMotor(motorA, modeA, leftMotorSpeed);
     turnMotor(motorB, modeB, rightMotorSpeed);
   }
