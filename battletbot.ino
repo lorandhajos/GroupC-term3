@@ -51,6 +51,7 @@ QTRSensors qtr;
 
 static const uint8_t analog_pins[] = {A7,A6,A5,A4,A3,A2,A1,A0};
 const uint8_t SensorCount = 8;
+uint16_t prevSensorValues[SensorCount];
 uint16_t sensorValues[SensorCount];
 
 bool isHoldingObject = false;
@@ -256,46 +257,49 @@ void loop() {
 
   // turn left
   if (error < -500) {
-    leftMotorSpeed = 0;
+    leftMotorSpeed = constrain(255 - abs(error) / 10, 0, 255);
   }
 
   // turn right
   if (error > 500) {
-    rightMotorSpeed = 0;
+    rightMotorSpeed = constrain(255 - abs(error) / 10, 0, 255);
   }
 
   int sumOfSensors = 0;
+  int sumOfPrevSensors = 0;
 
   for (uint8_t i = 0; i < SensorCount; i++) {
     sumOfSensors += sensorValues[i];
   }
 
-  // detect the end/start block
   if (sumOfSensors >= 7984) {
-    endBlockChance++;
-
-    if (endBlockChance >= 5 && !isHoldingObject) {
-      move();
-      servo.write(50);
-      delay(3000);
-      isHoldingObject = true;
+    memcpy(prevSensorValues, sensorValues, sizeof(prevSensorValues));
+    move();
+    delay(1000);
+    moveDelay(100);
+    move();
+    delay(1000);
+  } else if (sumOfSensors <= 800) {
+    for (uint8_t i = 0; i < SensorCount; i++) {
+      sumOfPrevSensors += prevSensorValues[i];
     }
-  } else if (endBlockChance >= 40) {
-    move();
-    moveDelay(90);
-    turnDegrees(-95);
-    move();
-    delay(3000);
-    Serial.println(endBlockChance);
-    endBlockChance = 0;
-    followLine = true;
-  }
 
-  // follow the line
-  if (followLine) {
-    turnMotor(motorA, modeA, leftMotorSpeed);
-    turnMotor(motorB, modeB, rightMotorSpeed);
-  } else {
+    if (sumOfPrevSensors >= 7984) {
+      moveDelay(150);
+      turnDegrees(-90);
+      move();
+      delay(1000);  
+    } else if (sumOfPrevSensors <= 5000) {
+      turnDegrees(180);      
+    } else if (sensorValues[0] >= 990) {
+      moveDelay(150);
+      turnDegrees(-95);
+    } else if (sensorValues[9] >= 990) {
+      moveDelay(150);
+      turnDegrees(-95);
+    }
+  }
+  else {
     turnMotor(motorA, modeA, leftMotorSpeed);
     turnMotor(motorB, modeB, rightMotorSpeed);
   }
