@@ -51,7 +51,7 @@ char buf[BUFFER_SIZE] = { 0 };
 
 QTRSensors qtr;
 
-static const uint8_t analog_pins[] = {A7,A6,A5,A4,A3,A2,A1,A0};//{A0,A1,A2,A3,A4,A5,A6,A7}; //{A7,A6,A5,A4,A3,A2,A1,A0};
+static const uint8_t analog_pins[] = {A7,A6,A5,A4,A3,A2,A1,A0};
 const uint8_t SensorCount = 8;
 uint16_t sensorValues[SensorCount];
 uint16_t digitalSensorValues[SensorCount];
@@ -62,10 +62,8 @@ bool end = false;
 uint16_t position = 0;
 
 // Headers
-void move(int value = 0);
-void turnMotor(int motor, int mode, int speed = 0);
-void moveDistance(int distance, int speed = 255);
 void stop();
+void moveDistance(int distance, int speed = 255);
 
 void setup() {
   // Start serial for PC <--> arduino connection
@@ -131,16 +129,33 @@ void updateB() {
   interrupts();
 }
 
-int degreeToCounter2(int degree = 0) {
-  return abs(degree) * 0.25; //* 3; // / 6.1;
+void wait(int interval) {
+  unsigned long desiredMillis = millis() + interval;
+  unsigned long currentMillis = millis();
+
+  while (currentMillis < desiredMillis) {
+    currentMillis = millis();
+  }
 }
 
 int degreeToCounter(int degree = 0) {
-  return abs(degree) * 0.35; //* 3; // / 6.1;
+  return abs(degree) * 0.36;
 }
 
 int distanceToCounter(int distance = 0) {
-  return abs(distance) / 5.5; //* 3; // / 5.5;
+  return abs(distance) / 5.5;
+}
+
+void turnMotor(int motor, int mode, int speed = 0) {
+  if (speed > 0 && speed <= 255) {
+    analogWrite(motor, speed);
+  } else if (speed < 0 && speed >= -255) {
+    digitalWrite(mode, HIGH);
+    analogWrite(motor, 255 - abs(speed));
+  } else {
+    digitalWrite(mode, LOW);
+    analogWrite(motor, 0);
+  }
 }
 
 void moveDistance(int distance, int speed = 255) {
@@ -167,9 +182,10 @@ void moveDistance(int distance, int speed = 255) {
   turnMotor(motorB, modeB);
 }
 
-void uTurn(int degree = 0, int speedA = 255, int speedB = 255) {
-  int distA = countA + degreeToCounter2(degree);
-  int distB = countB + degreeToCounter2(degree); 
+void uTurn() {
+  int degree = 180;
+  int distA = countA + abs(degree) * 0.24;
+  int distB = countB + abs(degree) * 0.24; 
   volatile int * counterA = &countA;
   volatile int * counterB = &countB;
 
@@ -177,15 +193,15 @@ void uTurn(int degree = 0, int speedA = 255, int speedB = 255) {
 
   if (degree > 0) {
     while (*counterA < distA) {
-      turnMotor(motorB, modeB, -speedB);
-      turnMotor(motorA, modeA,  speedA);
+      turnMotor(motorB, modeB, -255);
+      turnMotor(motorA, modeA,  255);
     }
     turnMotor(motorB, modeB);
     turnMotor(motorA, modeA);
   } else {
     while (*counterB < distB) {
-      turnMotor(motorA, modeA, -speedA);
-      turnMotor(motorB, modeB,  speedB);
+      turnMotor(motorA, modeA, -255);
+      turnMotor(motorB, modeB,  255);
     }
     turnMotor(motorA, modeA);
     turnMotor(motorB, modeB);
@@ -215,32 +231,8 @@ void turnDegrees(int degree = 0, int speedA = 255, int speedB = 255) {
     turnMotor(motorA, modeA);
     turnMotor(motorB, modeB);
   }
-}
 
-void turnMotor(int motor, int mode, int speed = 0) {
-  if (speed > 0 && speed <= 255) {
-    analogWrite(motor, speed);
-  } else if (speed < 0 && speed >= -255) {
-    digitalWrite(mode, HIGH);
-    analogWrite(motor, 255 - abs(speed));
-  } else {
-    digitalWrite(mode, LOW);
-    analogWrite(motor, 0);
-  }
-}
-
-void move(int value = 0) {
-  if (value > 0 && value <= 255) {
-    analogWrite(motorA, value);
-    analogWrite(motorB, value);
-  } else if (value < 0 && value >= -255) {
-    digitalWrite(modeA, HIGH);
-    digitalWrite(modeB, HIGH);
-    analogWrite(motorA, 255 + value);
-    analogWrite(motorB, 255 + value);
-  } else {
-    stop();
-  }
+  wait(100);
 }
 
 void stop() {
@@ -282,13 +274,11 @@ void getDigitalValues(int sensitivity) {
 
 void startMaze() {
   moveDistance(60);
-  delay(500);
   servo.write(70);
-  delay(500);
+  wait(100);
   moveDistance(70);
-  delay(500);
+  wait(100);
   turnDegrees(-90, 0, 255);
-  delay(1000);
 
   start = true;
 }
@@ -310,11 +300,11 @@ void solveMaze() {
 
   getDigitalValues(sensorSensitivity);
 
-  if (digitalSensorValues[4] == 1 && digitalSensorValues[5] == 1 && digitalSensorValues[6] == 1 && digitalSensorValues[7] == 1) { // right and center
+  // right and center
+  if (digitalSensorValues[4] == 1 && digitalSensorValues[5] == 1 && digitalSensorValues[6] == 1 && digitalSensorValues[7] == 1) {
     stop();
-    delay(500);
     moveDistance(15);
-    delay(500);
+    wait(100);
 
     qtr.readLineBlack(sensorValues);
     getDigitalValues(sensorSensitivity);
@@ -325,11 +315,11 @@ void solveMaze() {
     } else {
       turnDegrees(90, 255, 0);
     }
+  // left and center
   } else if (digitalSensorValues[0] == 1 && digitalSensorValues[1] == 1 && digitalSensorValues[2] == 1 && digitalSensorValues[3] == 1) {
     stop();
-    delay(500);
     moveDistance(15);
-    delay(500);
+    wait(100);
 
     qtr.readLineBlack(sensorValues);
     getDigitalValues(sensorSensitivity);
@@ -342,32 +332,32 @@ void solveMaze() {
               digitalSensorValues[1] == 1 || digitalSensorValues[2] == 1) { // right
     turnMotor(motorA, modeA, leftMotorSpeed);
     turnMotor(motorB, modeB, rightMotorSpeed);
-    return;
+    //return;
   } else if (getSumOfSensorValues(digitalSensorValues) == 8) { // intersection
     stop();
-    delay(500);
-    moveDistance(45);
-    delay(500);
+    moveDistance(40);
+    wait(100);
 
     qtr.readLineBlack(sensorValues);
     getDigitalValues(sensorSensitivity);
 
     if (getSumOfSensorValues(digitalSensorValues) == 0) {
-      uTurn(180);
+      uTurn();
+      wait(500);
     } else {
       turnDegrees(90, 255, 0);
     }
   } else if (getSumOfSensorValues(digitalSensorValues) == 0) { // dead end
     stop();
-    delay(500);
-    moveDistance(40); // 45
+    moveDistance(40);
+    wait(100);
 
     qtr.readLineBlack(sensorValues);
     getDigitalValues(sensorSensitivity);
 
     if (getSumOfSensorValues(digitalSensorValues) == 0) {
-      uTurn(180);
-      delay(500);
+      uTurn();
+      wait(500);
     } else {
       turnDegrees(90, 255, 0);
     }
@@ -379,17 +369,15 @@ void solveMaze() {
 
 void endMaze() {
   stop();
-  delay(500);
+  wait(100);
   servo.write(120);
-  delay(500);
+  wait(100);
   moveDistance(-100);
 
   end = true;
 }
 
 void loop() {
-  /* Serial */
-
   // If data is available from HC-05
   if (bluetooth.available() > 0) {
     // HC-05 -> Arduino -> PC
@@ -410,6 +398,7 @@ void loop() {
     bluetooth.write(Serial.read());
   }
 
+  // Solve the maze
   if (!start) {
     startMaze();
   } else if (!solve) {
