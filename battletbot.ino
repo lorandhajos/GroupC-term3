@@ -29,8 +29,8 @@ Adafruit_NeoPixel neoPixels(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
 #define encoderA 2
 #define encoderB 3
 
-int countA = 0;
-int countB = 0;
+volatile int countA = 0;
+volatile int countB = 0;
 
 // Servo
 #define servoPin 4
@@ -47,21 +47,25 @@ const int BUFFER_SIZE = 50;
 char buf[BUFFER_SIZE] = { 0 };
 
 // Light sensor
+#define sensorSensitivity 900
+
 QTRSensors qtr;
 
-static const uint8_t analog_pins[] = {A7,A6,A5,A4,A3,A2,A1,A0};
+static const uint8_t analog_pins[] = {A7,A6,A5,A4,A3,A2,A1,A0};//{A0,A1,A2,A3,A4,A5,A6,A7}; //{A7,A6,A5,A4,A3,A2,A1,A0};
 const uint8_t SensorCount = 8;
-uint16_t prevSensorValues[SensorCount];
 uint16_t sensorValues[SensorCount];
+uint16_t digitalSensorValues[SensorCount];
 
-bool isHoldingObject = false;
-int endBlockChance = 0;
-bool followLine = false;
+bool start = false;
+bool solve = false;
+bool end = false;
+uint16_t position = 0;
 
 // Headers
 void move(int value = 0);
-void moveDelay(int delay);
 void turnMotor(int motor, int mode, int speed = 0);
+void moveDistance(int distance, int speed = 255);
+void stop();
 
 void setup() {
   // Start serial for PC <--> arduino connection
@@ -102,20 +106,17 @@ void setup() {
   qtr.setTypeAnalog();
   qtr.setSensorPins(analog_pins, SensorCount);
 
-  moveDelay(140);
+  moveDistance(18);
 
   // Start sensor calibration
   for (uint16_t i = 0; i < 250; i++) {
     qtr.calibrate();
     if (i % 80 == 0) {
-      move(255);
-      delay(35);
+      moveDistance(15);
     } else {
-      move(0);
+      stop();
     }
   }
-
-  moveDelay(50);
 }
 
 void updateA() {
@@ -130,38 +131,35 @@ void updateB() {
   interrupts();
 }
 
+int degreeToCounter2(int degree = 0) {
+  return abs(degree) * 0.25; //* 3; // / 6.1;
+}
+
 int degreeToCounter(int degree = 0) {
-  return abs(degree) / 5.5;
+  return abs(degree) * 0.35; //* 3; // / 6.1;
 }
 
-void moveDelay(int numDelay) {
-  turnMotor(motorA, modeA, 255);
-  turnMotor(motorB, modeB, 255);
-  delay(numDelay);
-  turnMotor(motorA, modeA);
-  turnMotor(motorB, modeB);
+int distanceToCounter(int distance = 0) {
+  return abs(distance) / 5.5; //* 3; // / 5.5;
 }
 
-// not tested
-void moveDistance(int distance) {
-  int distA = countA + degreeToCounter(distance);
-  int distB = countB + degreeToCounter(distance); 
-  int * counterA = &countA;
-  int * counterB = &countB;
+void moveDistance(int distance, int speed = 255) {
+  int distA = countA + distanceToCounter(distance);
+  int distB = countB + distanceToCounter(distance); 
+  volatile int * counterA = &countA;
+  volatile int * counterB = &countB;
+
+  stop();
 
   if (distance > 0) {
-    while (*counterA < distA || *counterB < distB) {
-      // Load bearing serial print
-      Serial.print("");
-      turnMotor(motorA, modeA, 255);
-      turnMotor(motorB, modeB, 255);
+    while (*counterA < distA && *counterB < distB) {
+      turnMotor(motorA, modeA, speed);
+      turnMotor(motorB, modeB, speed);
     }
   } else {
-    while (*counterA < distA || *counterB < distB) {
-      // Load bearing serial print
-      Serial.print("");
-      turnMotor(motorA, modeA, -255);
-      turnMotor(motorB, modeB, -255);
+    while (*counterA < distA && *counterB < distB) {
+      turnMotor(motorA, modeA, -speed);
+      turnMotor(motorB, modeB, -speed);
     }
   }
 
@@ -169,27 +167,50 @@ void moveDistance(int distance) {
   turnMotor(motorB, modeB);
 }
 
-void turnDegrees(int degree = 0) {
-  int distA = countA + degreeToCounter(degree);
-  int distB = countB + degreeToCounter(degree); 
-  int * counterA = &countA;
-  int * counterB = &countB;
+void uTurn(int degree = 0, int speedA = 255, int speedB = 255) {
+  int distA = countA + degreeToCounter2(degree);
+  int distB = countB + degreeToCounter2(degree); 
+  volatile int * counterA = &countA;
+  volatile int * counterB = &countB;
+
+  stop();
 
   if (degree > 0) {
-    while (*counterA < distA || *counterB < distB) {
-      // Load bearing serial print
-      Serial.print("");
-      turnMotor(motorA, modeA,  255);
-      turnMotor(motorB, modeB, -255);
+    while (*counterA < distA) {
+      turnMotor(motorB, modeB, -speedB);
+      turnMotor(motorA, modeA,  speedA);
+    }
+    turnMotor(motorB, modeB);
+    turnMotor(motorA, modeA);
+  } else {
+    while (*counterB < distB) {
+      turnMotor(motorA, modeA, -speedA);
+      turnMotor(motorB, modeB,  speedB);
+    }
+    turnMotor(motorA, modeA);
+    turnMotor(motorB, modeB);
+  }
+}
+
+void turnDegrees(int degree = 0, int speedA = 255, int speedB = 255) {
+  int distA = countA + degreeToCounter(degree);
+  int distB = countB + degreeToCounter(degree); 
+  volatile int * counterA = &countA;
+  volatile int * counterB = &countB;
+
+  stop();
+
+  if (degree > 0) {
+    while (*counterA < distA) {
+      turnMotor(motorA, modeA,  speedA);
+      turnMotor(motorB, modeB, -speedB);
     }
     turnMotor(motorA, modeA);
     turnMotor(motorB, modeB);
   } else {
-    while (*counterA < distA || *counterB < distB) {
-      // Load bearing serial print
-      Serial.print("");
-      turnMotor(motorA, modeA, -255);
-      turnMotor(motorB, modeB,  255);
+    while (*counterB < distB) {
+      turnMotor(motorA, modeA, -speedA);
+      turnMotor(motorB, modeB,  speedB);
     }
     turnMotor(motorA, modeA);
     turnMotor(motorB, modeB);
@@ -201,7 +222,7 @@ void turnMotor(int motor, int mode, int speed = 0) {
     analogWrite(motor, speed);
   } else if (speed < 0 && speed >= -255) {
     digitalWrite(mode, HIGH);
-    analogWrite(motor, 255 + speed);
+    analogWrite(motor, 255 - abs(speed));
   } else {
     digitalWrite(mode, LOW);
     analogWrite(motor, 0);
@@ -218,11 +239,152 @@ void move(int value = 0) {
     analogWrite(motorA, 255 + value);
     analogWrite(motorB, 255 + value);
   } else {
-    digitalWrite(modeA, LOW);
-    digitalWrite(modeB, LOW);
-    analogWrite(motorA, 0);
-    analogWrite(motorB, 0);
+    stop();
   }
+}
+
+void stop() {
+  digitalWrite(modeA, LOW);
+  digitalWrite(modeB, LOW);
+  analogWrite(motorA, 0);
+  analogWrite(motorB, 0);
+}
+
+void dumpSensorValues(uint16_t * values) {
+  char sensorStr[50];
+
+  snprintf(sensorStr, sizeof(sensorStr), "sensorValues: %d %d %d %d %d %d %d %d",
+      values[0], values[1], values[2], values[3],
+      values[4], values[5], values[6], values[7]);
+
+  Serial.println(sensorStr);
+}
+
+int getSumOfSensorValues(uint16_t * values) {
+  int sum = 0;
+
+  for (uint8_t i = 0; i < SensorCount; i++) {
+    sum += values[i];
+  }
+
+  return sum;
+}
+
+void getDigitalValues(int sensitivity) {
+  for (uint8_t i = 0; i < SensorCount; i++) {
+    if (sensorValues[i] > sensitivity) {
+      digitalSensorValues[i] = 1;
+    } else {
+      digitalSensorValues[i] = 0;
+    }
+  }  
+}
+
+void startMaze() {
+  moveDistance(60);
+  delay(500);
+  servo.write(70);
+  delay(500);
+  moveDistance(70);
+  delay(500);
+  turnDegrees(-90, 0, 255);
+  delay(1000);
+
+  start = true;
+}
+
+void solveMaze() {
+  position = qtr.readLineBlack(sensorValues);
+
+  int16_t error = position - 3500;
+  int16_t leftMotorSpeed = 255;
+  int16_t rightMotorSpeed = 255;
+
+  if (error < -500) {
+    leftMotorSpeed = constrain(255 - abs(error) / 5, 0, 255);
+  }
+
+  if (error > 500) {
+    rightMotorSpeed = constrain(255 - abs(error) / 5, 0, 255);
+  }
+
+  getDigitalValues(sensorSensitivity);
+
+  if (digitalSensorValues[4] == 1 && digitalSensorValues[5] == 1 && digitalSensorValues[6] == 1 && digitalSensorValues[7] == 1) { // right and center
+    stop();
+    delay(500);
+    moveDistance(15);
+    delay(500);
+
+    qtr.readLineBlack(sensorValues);
+    getDigitalValues(sensorSensitivity);
+
+    if (getSumOfSensorValues(digitalSensorValues) == 8) {
+      stop();
+      solve = true;
+    } else {
+      turnDegrees(90, 255, 0);
+    }
+  } else if (digitalSensorValues[0] == 1 && digitalSensorValues[1] == 1 && digitalSensorValues[2] == 1 && digitalSensorValues[3] == 1) {
+    stop();
+    delay(500);
+    moveDistance(15);
+    delay(500);
+
+    qtr.readLineBlack(sensorValues);
+    getDigitalValues(sensorSensitivity);
+
+    if (getSumOfSensorValues(digitalSensorValues) == 0) {
+      turnDegrees(-90, 0, 255);
+    }
+  } else if (digitalSensorValues[5] == 1 || digitalSensorValues[6] == 1 || // left
+              digitalSensorValues[3] == 1 || digitalSensorValues[4] == 1 || // center 
+              digitalSensorValues[1] == 1 || digitalSensorValues[2] == 1) { // right
+    turnMotor(motorA, modeA, leftMotorSpeed);
+    turnMotor(motorB, modeB, rightMotorSpeed);
+    return;
+  } else if (getSumOfSensorValues(digitalSensorValues) == 8) { // intersection
+    stop();
+    delay(500);
+    moveDistance(45);
+    delay(500);
+
+    qtr.readLineBlack(sensorValues);
+    getDigitalValues(sensorSensitivity);
+
+    if (getSumOfSensorValues(digitalSensorValues) == 0) {
+      uTurn(180);
+    } else {
+      turnDegrees(90, 255, 0);
+    }
+  } else if (getSumOfSensorValues(digitalSensorValues) == 0) { // dead end
+    stop();
+    delay(500);
+    moveDistance(40); // 45
+
+    qtr.readLineBlack(sensorValues);
+    getDigitalValues(sensorSensitivity);
+
+    if (getSumOfSensorValues(digitalSensorValues) == 0) {
+      uTurn(180);
+      delay(500);
+    } else {
+      turnDegrees(90, 255, 0);
+    }
+  } else {
+    turnMotor(motorA, modeA, leftMotorSpeed);
+    turnMotor(motorB, modeB, rightMotorSpeed);
+  }
+}
+
+void endMaze() {
+  stop();
+  delay(500);
+  servo.write(120);
+  delay(500);
+  moveDistance(-100);
+
+  end = true;
 }
 
 void loop() {
@@ -248,59 +410,11 @@ void loop() {
     bluetooth.write(Serial.read());
   }
 
-  /* Motor */
-  uint16_t position = qtr.readLineBlack(sensorValues);
-
-  int16_t error = position - 3500;
-  int16_t leftMotorSpeed = 255;
-  int16_t rightMotorSpeed = 255;
-
-  // turn left
-  if (error < -500) {
-    leftMotorSpeed = constrain(255 - abs(error) / 10, 0, 255);
-  }
-
-  // turn right
-  if (error > 500) {
-    rightMotorSpeed = constrain(255 - abs(error) / 10, 0, 255);
-  }
-
-  int sumOfSensors = 0;
-  int sumOfPrevSensors = 0;
-
-  for (uint8_t i = 0; i < SensorCount; i++) {
-    sumOfSensors += sensorValues[i];
-  }
-
-  if (sumOfSensors >= 7984) {
-    memcpy(prevSensorValues, sensorValues, sizeof(prevSensorValues));
-    move();
-    delay(1000);
-    moveDelay(100);
-    move();
-    delay(1000);
-  } else if (sumOfSensors <= 800) {
-    for (uint8_t i = 0; i < SensorCount; i++) {
-      sumOfPrevSensors += prevSensorValues[i];
-    }
-
-    if (sumOfPrevSensors >= 7984) {
-      moveDelay(150);
-      turnDegrees(-90);
-      move();
-      delay(1000);  
-    } else if (sumOfPrevSensors <= 5000) {
-      turnDegrees(180);      
-    } else if (sensorValues[0] >= 990) {
-      moveDelay(150);
-      turnDegrees(-95);
-    } else if (sensorValues[9] >= 990) {
-      moveDelay(150);
-      turnDegrees(-95);
-    }
-  }
-  else {
-    turnMotor(motorA, modeA, leftMotorSpeed);
-    turnMotor(motorB, modeB, rightMotorSpeed);
+  if (!start) {
+    startMaze();
+  } else if (!solve) {
+    solveMaze();
+  } else if (!end) {
+    endMaze();
   }
 }
