@@ -297,6 +297,19 @@ void stop()
     analogWrite(MOTOR_B, 0);
 }
 
+void rainbow() {
+    for(long firstPixelHue = 0; firstPixelHue < 5*65536; firstPixelHue += 256)
+    {
+        for(int i = 0; i < neopixels.numPixels(); i++)
+        { 
+            int pixelHue = firstPixelHue + (i * 65536L / neopixels.numPixels());
+            neopixels.setPixelColor(i, neopixels.gamma32(neopixels.ColorHSV(pixelHue)));
+        }
+        neopixels.show();
+        wait(5);
+    }
+}
+
 void dumpSensorValues(uint16_t * values)
 {
     char sensorStr[50];
@@ -448,9 +461,21 @@ void endMaze()
     wait(100);
     servo.write(120);
     wait(100);
-    moveDistance(-100);
+    moveDistance(-200);
 
     bluetooth.write("1337\n");
+
+    // do end sequence
+    uTurn();
+    neopixels.setBrightness(100);
+    for (int i = 0; i < 1000; i++)
+    {
+        rainbow();
+    }
+
+    // turn off neopixels
+    neopixels.setBrightness(0);
+    neopixels.show();
 
     end = true;
 }
