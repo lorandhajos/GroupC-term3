@@ -63,6 +63,7 @@ uint16_t position = 0;
 // Headers
 void stop();
 void moveDistance(int distance, int speed);
+void fillNeopixels(int r = 255, int g = 255, int b = 255);
 
 void setup()
 {
@@ -78,7 +79,7 @@ void setup()
 
     // Initialize neopixels
     neopixels.begin();
-    neopixels.setBrightness(50);
+    neopixels.setBrightness(20);
     neopixels.show();
 
     // Initialize motors
@@ -124,6 +125,9 @@ void setup()
     
     moveDistance(18, 255);
 
+    // start neopxiels
+    fillNeopixels();
+
     // Start sensor calibration
     for (uint16_t i = 0; i < 250; i++)
     {
@@ -138,7 +142,7 @@ void setup()
             stop();
         }
     }
-  }
+}
 
 void updateA()
 {
@@ -152,6 +156,13 @@ void updateB()
     noInterrupts();
     counterB++;
     interrupts();
+}
+
+void fillNeopixels(int r = 255, int g = 255, int b = 255) {
+    for (int i = 0; i < LED_COUNT; i++) {
+        neopixels.setPixelColor(i, r, g, b);
+        neopixels.show();
+    }
 }
 
 void wait(int interval)
@@ -213,7 +224,7 @@ void moveDistance(int distance, int speed = 255)
     else
     {
         while (*counterPointerA < distA && *counterPointerB < distB)
-        {
+        {   
             turnMotor(MOTOR_A, MODE_A, -speed);
             turnMotor(MOTOR_B, MODE_B, -speed);
         }
@@ -229,6 +240,7 @@ void uTurn()
     volatile int * counterPointerB = &counterB;
 
     stop();
+    fillNeopixels(0, 0, 255);
 
     while (*counterPointerB < distB)
     {
@@ -255,6 +267,9 @@ void turnDegrees(int degree = 0, int speedA = 255, int speedB = 255)
         {
             turnMotor(MOTOR_A, MODE_A,  speedA);
             turnMotor(MOTOR_B, MODE_B, -speedB);
+            neopixels.setPixelColor(1, 0, 255, 0);
+            neopixels.setPixelColor(2, 0, 255, 0);
+            neopixels.show();
         }
     }
     else
@@ -263,6 +278,9 @@ void turnDegrees(int degree = 0, int speedA = 255, int speedB = 255)
         {
             turnMotor(MOTOR_A, MODE_A, -speedA);
             turnMotor(MOTOR_B, MODE_B,  speedB);
+            neopixels.setPixelColor(0, 0, 255, 0);
+            neopixels.setPixelColor(3, 0, 255, 0);
+            neopixels.show();
         }   
     }
 
@@ -378,6 +396,7 @@ void solveMaze()
         // adjust motor speed to follow line
         turnMotor(MOTOR_A, MODE_A, leftMotorSpeed);
         turnMotor(MOTOR_B, MODE_B, rightMotorSpeed);
+        fillNeopixels();
     }
     // intersection
     else if (getSumOfSensorValues(digitalSensorValues) == 8)
