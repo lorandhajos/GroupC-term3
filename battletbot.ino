@@ -194,14 +194,14 @@ void moveDistance(int distance, int speed = 255)
 {
     int distA = counterA + distanceToCounter(distance);
     int distB = counterB + distanceToCounter(distance); 
-    volatile int * counterA = &counterA;
-    volatile int * counterB = &counterB;
+    volatile int * counterPointerA = &counterA;
+    volatile int * counterPointerB = &counterB;
 
     stop();
 
     if (distance > 0)
     {
-        while (*counterA < distA && *counterB < distB)
+        while (*counterPointerA < distA && *counterPointerB < distB)
         {
             turnMotor(MOTOR_A, MODE_A, speed);
             turnMotor(MOTOR_B, MODE_B, speed);
@@ -209,7 +209,7 @@ void moveDistance(int distance, int speed = 255)
     }
     else
     {
-        while (*counterA < distA && *counterB < distB)
+        while (*counterPointerA < distA && *counterPointerB < distB)
         {
             turnMotor(MOTOR_A, MODE_A, -speed);
             turnMotor(MOTOR_B, MODE_B, -speed);
@@ -225,14 +225,14 @@ void uTurn()
     int degree = 180;
     int distA = counterA + abs(degree) * 0.24;
     int distB = counterB + abs(degree) * 0.24; 
-    volatile int * counterA = &counterA;
-    volatile int * counterB = &counterB;
+    volatile int * counterPointerA = &counterA;
+    volatile int * counterPointerB = &counterB;
 
     stop();
 
     if (degree > 0)
     {
-        while (*counterA < distA)
+        while (*counterPointerA < distA)
         {
             turnMotor(MOTOR_B, MODE_B, -255);
             turnMotor(MOTOR_A, MODE_A,  255);
@@ -240,7 +240,7 @@ void uTurn()
     }
     else
     {
-        while (*counterB < distB)
+        while (*counterPointerB < distB)
         {
             turnMotor(MOTOR_A, MODE_A, -255);
             turnMotor(MOTOR_B, MODE_B,  255);
@@ -255,14 +255,14 @@ void turnDegrees(int degree = 0, int speedA = 255, int speedB = 255)
 {
     int distA = counterA + degreeToCounter(degree);
     int distB = counterB + degreeToCounter(degree); 
-    volatile int * counterA = &counterA;
-    volatile int * counterB = &counterB;
+    volatile int * counterPointerA = &counterA;
+    volatile int * counterPointerB = &counterB;
 
     stop();
 
     if (degree > 0)
     {
-        while (*counterA < distA)
+        while (*counterPointerA < distA)
         {
             turnMotor(MOTOR_A, MODE_A,  speedA);
             turnMotor(MOTOR_B, MODE_B, -speedB);
@@ -270,7 +270,7 @@ void turnDegrees(int degree = 0, int speedA = 255, int speedB = 255)
     }
     else
     {
-        while (*counterB < distB)
+        while (*counterPointerB < distB)
         {
             turnMotor(MOTOR_A, MODE_A, -speedA);
             turnMotor(MOTOR_B, MODE_B,  speedB);
