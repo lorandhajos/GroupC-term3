@@ -119,6 +119,9 @@ void setup()
         Serial.println(ussDistance);
     }
     
+    // wait for the other robot to get out the way
+    wait(3000);
+    
     moveDistance(18, 255);
 
     // Start sensor calibration
@@ -222,29 +225,15 @@ void moveDistance(int distance, int speed = 255)
 
 void uTurn()
 {
-    int degree = 180;
-    int distA = counterA + abs(degree) * 0.24;
-    int distB = counterB + abs(degree) * 0.24; 
-    volatile int * counterPointerA = &counterA;
+    int distB = counterB + abs(-95) * 0.24; 
     volatile int * counterPointerB = &counterB;
 
     stop();
 
-    if (degree > 0)
+    while (*counterPointerB < distB)
     {
-        while (*counterPointerA < distA)
-        {
-            turnMotor(MOTOR_B, MODE_B, -255);
-            turnMotor(MOTOR_A, MODE_A,  255);
-        }
-    }
-    else
-    {
-        while (*counterPointerB < distB)
-        {
-            turnMotor(MOTOR_A, MODE_A, -255);
-            turnMotor(MOTOR_B, MODE_B,  255);
-        }
+        turnMotor(MOTOR_A, MODE_A, -255);
+        turnMotor(MOTOR_B, MODE_B,  255);
     }
 
     turnMotor(MOTOR_A, MODE_A);
@@ -382,21 +371,6 @@ void solveMaze()
             turnDegrees(90, 255, 0);
         }
     }
-    // left and center
-    else if (digitalSensorValues[0] == 1 && digitalSensorValues[1] == 1 && digitalSensorValues[2] == 1 && digitalSensorValues[3] == 1)
-    {
-        stop();
-        moveDistance(15);
-        wait(100);
-
-        qtr.readLineBlack(sensorValues);
-        getDigitalValues();
-
-        if (getSumOfSensorValues(digitalSensorValues) == 0)
-        {
-            turnDegrees(-90, 0, 255);
-        }
-    }
     else if (digitalSensorValues[5] == 1 || digitalSensorValues[6] == 1 || // left
             digitalSensorValues[3] == 1 || digitalSensorValues[4] == 1 || // center 
             digitalSensorValues[1] == 1 || digitalSensorValues[2] == 1) // right
@@ -431,6 +405,8 @@ void solveMaze()
         stop();
         moveDistance(40);
         wait(100);
+        turnDegrees(-90, 0, 255);
+        wait(100);
 
         qtr.readLineBlack(sensorValues);
         getDigitalValues();
@@ -439,10 +415,6 @@ void solveMaze()
         {
             uTurn();
             wait(500);
-        }
-        else
-        {
-            turnDegrees(90, 255, 0);
         }
     }
     else
