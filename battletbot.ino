@@ -117,7 +117,6 @@ void setup()
         digitalWrite(TRIGGER, LOW);
         duration = pulseIn(ECHO, HIGH);
         ussDistance = duration * 0.034 / 2;
-        Serial.println(ussDistance);
     }
     
     // wait for the other robot to get out the way
@@ -451,32 +450,13 @@ void endMaze()
     wait(100);
     moveDistance(-100);
 
+    bluetooth.write("1337\n");
+
     end = true;
 }
 
 void loop()
 {
-    // If data is available from HC-05
-    if (bluetooth.available() > 0)
-    {
-        // HC-05 -> Arduino -> PC
-        // Write the output from HC-05
-        bluetooth.readBytesUntil('\n', buf, BUFFER_SIZE);
-
-        Serial.print("HC-05::> ");
-        Serial.print(buf);
-        Serial.println();
-        Serial.flush();
-    }
-
-    // If we input a command
-    if (Serial.available() > 0)
-    {
-        // PC -> Arduino -> HC-05
-        // Read from serial and write to HC-05
-        bluetooth.write(Serial.read());
-    }
-
     // Solve the maze
     if (!start)
     {
@@ -489,6 +469,5 @@ void loop()
     else if (!end)
     {
         endMaze();
-        bluetooth.write("1337\r\n");
     }
 }
