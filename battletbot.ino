@@ -63,7 +63,7 @@ uint16_t position = 0;
 
 // Headers
 void stop();
-void moveDistance(int distance, int speed = 255);
+void moveDistance(int distance, int speed);
 
 void setup() {
   // Start serial for PC <--> arduino connection
@@ -99,18 +99,32 @@ void setup() {
   // USS
   pinMode(trigger, OUTPUT);
   pinMode(echo, INPUT);
+  int ussDistance = 1000;
+  int duration = 0;
 
   // lightSensor
   qtr.setTypeAnalog();
   qtr.setSensorPins(analog_pins, SensorCount);
-
-  moveDistance(18);
+  
+  // read the uss sensor
+  while (ussDistance >= 20) {
+    digitalWrite(trigger, LOW);
+    delayMicroseconds(2);
+    digitalWrite(trigger, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(trigger, LOW);
+    duration = pulseIn(echo, HIGH);
+    ussDistance = duration * 0.034 / 2;
+    Serial.println(ussDistance);
+  }
+  
+  moveDistance(18, 255);
 
   // Start sensor calibration
   for (uint16_t i = 0; i < 250; i++) {
     qtr.calibrate();
     if (i % 80 == 0) {
-      moveDistance(15);
+      moveDistance(15, 255);
     } else {
       stop();
     }
@@ -405,5 +419,6 @@ void loop() {
     solveMaze();
   } else if (!end) {
     endMaze();
+    bluetooth.write("1337\r\n");
   }
 }
